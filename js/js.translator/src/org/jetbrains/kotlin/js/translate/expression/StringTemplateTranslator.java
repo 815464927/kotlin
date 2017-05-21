@@ -16,10 +16,7 @@
 
 package org.jetbrains.kotlin.js.translate.expression;
 
-import org.jetbrains.kotlin.js.backend.ast.JsExpression;
-import org.jetbrains.kotlin.js.backend.ast.JsInvocation;
-import org.jetbrains.kotlin.js.backend.ast.JsNameRef;
-import org.jetbrains.kotlin.js.backend.ast.JsNumberLiteral;
+import org.jetbrains.kotlin.js.backend.ast.*;
 import com.intellij.util.SmartList;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -87,16 +84,20 @@ public final class StringTemplateTranslator extends AbstractTranslator {
 
             KotlinType type = context().bindingContext().getType(entryExpression);
 
-            if (translatedExpression instanceof JsNumberLiteral) {
+            if (type != null && KotlinBuiltIns.isCharOrNullableChar(type)) {
+                if (type.isMarkedNullable()) {
+                    JsExpression tmp = context().defineTemporary(translatedExpression);
+                    append(new JsConditional(JsAstUtils.equality(tmp, JsLiteral.NULL), JsLiteral.NULL, JsAstUtils.charToString(tmp)));
+                }
+                else {
+                    append(JsAstUtils.charToString(translatedExpression));
+                }
+            }
+            else if (translatedExpression instanceof JsNumberLiteral) {
                 append(context().program().getStringLiteral(translatedExpression.toString()));
-                return;
             }
-
-            if (type == null || type.isMarkedNullable()) {
+            else if (type == null || type.isMarkedNullable()) {
                 append(TopLevelFIF.TO_STRING.apply((JsExpression) null, new SmartList<>(translatedExpression), context()));
-            }
-            else if (KotlinBuiltIns.isChar(type)) {
-                append(JsAstUtils.charToString(translatedExpression));
             }
             else if (mustCallToString(type)) {
                 append(new JsInvocation(new JsNameRef("toString", translatedExpression)));
